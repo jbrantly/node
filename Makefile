@@ -1,7 +1,147 @@
-WAF=python tools/waf-light
 
-all:
-	@$(WAF) build
+#
+#
+# New 
+#
+#
+
+#config
+WANT_OPENSSL=1
+
+platform := $(shell python -c 'import sys; print sys.platform')
+
+arch = x86 # FIXME
+
+
+ifdef WANT_OPENSSL
+	HAVE_OPENSSL = 1
+	HAVE_CRYPTO = 1
+	ifdef OPENSSL_DIR
+		OPENSSL_LINKFLAGS += -L$(OPENSSL_DIR)/lib
+		OPENSSL_CPPFLAGS += -I$(OPENSSL_DIR)/include
+	endif
+	OPENSSL_LINKFLAGS += -lssl -lcrypto
+endif
+
+cflags += -pedantic
+
+
+
+
+# PROFILES
+# Default profile is debug 'make PROFILE=release' for a release.
+PROFILE ?= debug
+
+debug_CFLAGS = -Wall -O0 -ggdb
+debug_CPPDEFINES = -DDEBUG
+debug_builddir = build/debug
+
+release_CFLAGS = -Wall -O2
+release_CPPDEFINES = -DNODEBUG
+release_builddir = build/release
+
+CPPFLAGS  += $($(PROFILE)_CPPFLAGS)
+CFLAGS    += $($(PROFILE)_CFLAGS)
+LINKFLAGS += $($(PROFILE)_LINKFLAGS)
+builddir   = $($(PROFILE)_builddir)
+
+
+
+
+libev_sources = deps/libev/ev.c
+libev_objects = $(builddir)/deps/libev/ev.o
+libev_CPPFLAGS = -Ideps/libev -Ideps/libev/$(platform)/
+
+libeio_sources = deps/libeio/eio.c
+libeio_objects = $(builddir)/deps/libeio/eio.o
+libeio_CPPFLAGS = -Ideps/libeio -Ideps/libeio/$(platform)/
+
+http_parser_sources = deps/http_parser/ev.c
+http_parser_objects = $(builddir)/deps/http_parser/ev.o
+http_parser_CPPFLAGS = -Ideps/http_parser
+
+cares_sources = $(wildcard deps/c-ares/*.c)
+cares_objects = $(addprefix $(builddir)/,$(cares_sources:.c=.o))
+cares_CPPFLAGS = -Ideps/c-ares -Ideps/c-ares/$(platform)-$(arch)/
+
+node_sources = src/node.cc \
+	src/platform_$(platform).cc \
+	src/node_buffer.cc \
+	src/node_cares.cc \
+	src/node_child_process.cc \
+	src/node_constants.cc \
+	src/node_crypto.cc \
+	src/node_events.cc \
+	src/node_extensions.cc \
+	src/node_file.cc \
+	src/node_http_parser.cc \
+	src/node_idle_watcher.cc \
+	src/node_io_watcher.cc \
+	src/node_main.cc \
+	src/node_net.cc \
+	src/node_script.cc \
+	src/node_signal_watcher.cc \
+	src/node_stat_watcher.cc \
+	src/node_stdio.cc \
+	src/node_timer.cc
+node_objects = $(addprefix $(builddir)/,$(node_sources:.cc=.o))
+node_CPPFLAGS = -Isrc/ -Ideps/libeio/ -Ideps/libev/ -Ideps/http_parser/ \
+	-Ideps/libev/include/ -DPLATFORM=\"$(platform)\" $(cares_CPPFLAGS)
+
+dirs = $(builddir)/src \
+	$(builddir)/deps/libev \
+	$(builddir)/deps/libeio \
+	$(builddir)/deps/c-ares \
+	$(builddir)/deps/http_parser \
+	$(builddir)/deps/v8
+
+
+# Rules
+
+all: $(builddir)/node $(dirs)
+
+$(dirs):
+	mkdir -p $@
+
+$(builddir)/deps/libev/%.o: deps/libev/%.c 
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $(libev_CFLAGS) $(libev_CPPFLAGS) $< -o $@
+
+$(builddir)/deps/libeio/%.o: deps/libeio/%.c 
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $(libeio_CFLAGS) $(libeio_CPPFLAGS) $< -o $@
+
+$(builddir)/deps/http_parser/%.o: deps/http_parser/%.c 
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $(http_parser_CFLAGS) \
+		$(http_parser_CPPFLAGS) $< -o $@
+
+$(builddir)/deps/c-ares/%.o: deps/c-ares/%.c 
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $(cares_CFLAGS) $(cares_CPPFLAGS) $< -o $@
+
+$(builddir)/src/%.o: src/%.cc
+	$(CXX) -c $(CXXFLAGS) $(CPPFLAGS) $(node_CFLAGS) $(node_CPPFLAGS) \
+		$(OPENSSL_CPPFLAGS) $< -o $@
+
+$(builddir)/src/node.o: src/node.cc $(builddir)/src/node_natives.h
+	$(CXX) -c $(CXXFLAGS) $(CPPFLAGS) $(node_CFLAGS) $(node_CPPFLAGS) \
+		$(OPENSSL_CPPFLAGS) -I$(builddir)/src/ $< -o $@
+
+$(builddir)/node: $(node_objects) $(libev_objects) $(libeio_objects) \
+		$(http_parser_objects) $(cares_objects)
+	$(CXX) -o $@ $^ $(LINKFLAGS) $(node_LINKFLAGS) $(OPENSSL_LINKFLAGS)
+
+$(builddir)/src/node_natives.h: lib/*.js
+	python tools/js2c.py $^ > $@
+	# TODO a debug flag for the macros ?
+
+
+#
+#
+# OLD
+#
+#
+
+
+
+WAF=python tools/waf-light
 
 all-progress:
 	@$(WAF) -p build
