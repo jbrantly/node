@@ -7,10 +7,12 @@
 
 #config
 WANT_OPENSSL=1
+PREFIX=/usr
 
 platform := $(shell python -c 'import sys; print sys.platform')
 
-arch = x86 # FIXME
+# fix me
+arch = x86
 
 
 ifdef WANT_OPENSSL
@@ -132,6 +134,15 @@ $(builddir)/node: $(node_objects) $(libev_objects) $(libeio_objects) \
 $(builddir)/src/node_natives.h: src/node.js lib/*.js
 	python tools/js2c.py $^ > $@
 	# TODO a debug flag for the macros ?
+
+$(builddir)/src/node_config.h: src/node_config.h.in
+	sed -e "s#@PREFIX@#$(PREFIX)#" \
+		-e "s#@CCFLAGS@#$(CFLAGS)#" \
+		-e "s#@CPPFLAGS@#$(CPPFLAGS)#" $< > $@ || rm $@
+
+# header deps
+src/node_version.h: $(builddir)/src/node_config.h
+src/node.cc: $(builddir)/src/node_config.h
 
 
 #
