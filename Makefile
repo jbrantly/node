@@ -86,7 +86,8 @@ node_sources = src/node.cc \
 	src/node_timer.cc
 node_objects = $(addprefix $(builddir)/,$(node_sources:.cc=.o))
 node_CPPFLAGS = -Isrc/ -Ideps/libeio/ -Ideps/libev/ -Ideps/http_parser/ \
-	-Ideps/libev/include/ -DPLATFORM=\"$(platform)\" $(cares_CPPFLAGS)
+	-Ideps/libev/include/ -Ideps/v8/include -DPLATFORM=\"$(platform)\" \
+	$(cares_CPPFLAGS)
 
 dirs = $(builddir)/src \
 	$(builddir)/deps/libev \
@@ -128,7 +129,7 @@ $(builddir)/node: $(node_objects) $(libev_objects) $(libeio_objects) \
 		$(http_parser_objects) $(cares_objects)
 	$(CXX) -o $@ $^ $(LINKFLAGS) $(node_LINKFLAGS) $(OPENSSL_LINKFLAGS)
 
-$(builddir)/src/node_natives.h: lib/*.js
+$(builddir)/src/node_natives.h: src/node.js lib/*.js
 	python tools/js2c.py $^ > $@
 	# TODO a debug flag for the macros ?
 
