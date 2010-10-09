@@ -12,7 +12,7 @@ PREFIX=/usr
 platform := $(shell python -c 'import sys; print sys.platform')
 
 # fix me
-arch = x86
+arch = x86_64
 
 
 ifdef WANT_OPENSSL
@@ -58,13 +58,13 @@ libeio_sources = deps/libeio/eio.c
 libeio_objects = $(builddir)/deps/libeio/eio.o
 libeio_CPPFLAGS = -Ideps/libeio -Ideps/libeio/$(platform)/
 
-http_parser_sources = deps/http_parser/ev.c
-http_parser_objects = $(builddir)/deps/http_parser/ev.o
+http_parser_sources = deps/http_parser/http_parser.c
+http_parser_objects = $(builddir)/deps/http_parser/http_parser.o
 http_parser_CPPFLAGS = -Ideps/http_parser
 
 cares_sources = $(wildcard deps/c-ares/*.c)
 cares_objects = $(addprefix $(builddir)/,$(cares_sources:.c=.o))
-cares_CPPFLAGS = -Ideps/c-ares -Ideps/c-ares/$(platform)-$(arch)/
+cares_CPPFLAGS = -DHAVE_CONFIG_H=1 -Ideps/c-ares -Ideps/c-ares/$(platform)-$(arch)
 
 node_sources = src/node.cc \
 	src/platform_$(platform).cc \
@@ -89,7 +89,9 @@ node_sources = src/node.cc \
 node_objects = $(addprefix $(builddir)/,$(node_sources:.cc=.o))
 node_CPPFLAGS = -Isrc/ -Ideps/libeio/ -Ideps/libev/ -Ideps/http_parser/ \
 	-Ideps/libev/include/ -Ideps/v8/include -DPLATFORM=\"$(platform)\" \
-	$(cares_CPPFLAGS)
+  -I$(builddir)/src $(cares_CPPFLAGS) \
+	 -DX_STACKSIZE=65536 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 \
+	 -DHAVE_FDATASYNC=0 
 
 dirs = $(builddir)/src \
 	$(builddir)/deps/libev \
@@ -101,7 +103,7 @@ dirs = $(builddir)/src \
 
 # Rules
 
-all: $(builddir)/node $(dirs)
+all: $(dirs) $(builddir)/node
 
 $(dirs):
 	mkdir -p $@
@@ -125,7 +127,7 @@ $(builddir)/src/%.o: src/%.cc
 
 $(builddir)/src/node.o: src/node.cc $(builddir)/src/node_natives.h
 	$(CXX) -c $(CXXFLAGS) $(CPPFLAGS) $(node_CFLAGS) $(node_CPPFLAGS) \
-		$(OPENSSL_CPPFLAGS) -I$(builddir)/src/ $< -o $@
+		$(OPENSSL_CPPFLAGS) $< -o $@
 
 $(builddir)/node: $(node_objects) $(libev_objects) $(libeio_objects) \
 		$(http_parser_objects) $(cares_objects)
@@ -211,7 +213,7 @@ docclean:
 	@-rm -f doc/node.1 doc/api.html doc/changelog.html
 
 clean:
-	@$(WAF) clean
+	@-find build -name "*.o" | xargs rm -f
 	@-find tools -name "*.pyc" | xargs rm -f
 
 distclean: docclean
