@@ -15,6 +15,11 @@ platform := $(shell python -c 'import sys; print sys.platform')
 arch = x86_64
 
 
+ifeq ($(platform),darwin)
+	LINKFLAGS += -framework Carbon
+endif
+
+
 ifdef WANT_OPENSSL
 	HAVE_OPENSSL = 1
 	HAVE_CRYPTO = 1
@@ -45,25 +50,26 @@ release_builddir = build/release
 CPPFLAGS  += $($(PROFILE)_CPPFLAGS)
 CFLAGS    += $($(PROFILE)_CFLAGS)
 LINKFLAGS += $($(PROFILE)_LINKFLAGS)
-builddir   = $($(PROFILE)_builddir)
+builddir = build
+profile_builddir = $(builddir)/$(PROFILE)
 
 
 
 
 libev_sources = deps/libev/ev.c
-libev_objects = $(builddir)/deps/libev/ev.o
+libev_objects = $(profile_builddir)/deps/libev/ev.o
 libev_CPPFLAGS = -Ideps/libev -Ideps/libev/$(platform)/
 
 libeio_sources = deps/libeio/eio.c
-libeio_objects = $(builddir)/deps/libeio/eio.o
+libeio_objects = $(profile_builddir)/deps/libeio/eio.o
 libeio_CPPFLAGS = -Ideps/libeio -Ideps/libeio/$(platform)/
 
 http_parser_sources = deps/http_parser/http_parser.c
-http_parser_objects = $(builddir)/deps/http_parser/http_parser.o
+http_parser_objects = $(profile_builddir)/deps/http_parser/http_parser.o
 http_parser_CPPFLAGS = -Ideps/http_parser
 
 cares_sources = $(wildcard deps/c-ares/*.c)
-cares_objects = $(addprefix $(builddir)/,$(cares_sources:.c=.o))
+cares_objects = $(addprefix $(profile_builddir)/,$(cares_sources:.c=.o))
 cares_CPPFLAGS = -DHAVE_CONFIG_H=1 -Ideps/c-ares -Ideps/c-ares/$(platform)-$(arch)
 
 node_sources = src/node.cc \
@@ -86,65 +92,74 @@ node_sources = src/node.cc \
 	src/node_stat_watcher.cc \
 	src/node_stdio.cc \
 	src/node_timer.cc
-node_objects = $(addprefix $(builddir)/,$(node_sources:.cc=.o))
+node_objects = $(addprefix $(profile_builddir)/,$(node_sources:.cc=.o))
 node_CPPFLAGS = -Isrc/ -Ideps/libeio/ -Ideps/libev/ -Ideps/http_parser/ \
 	-Ideps/libev/include/ -Ideps/v8/include -DPLATFORM=\"$(platform)\" \
-  -I$(builddir)/src $(cares_CPPFLAGS) \
+  -I$(profile_builddir)/src $(cares_CPPFLAGS) \
 	 -DX_STACKSIZE=65536 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 \
 	 -DHAVE_FDATASYNC=0 
 
-dirs = $(builddir)/src \
-	$(builddir)/deps/libev \
-	$(builddir)/deps/libeio \
-	$(builddir)/deps/c-ares \
-	$(builddir)/deps/http_parser \
-	$(builddir)/deps/v8
+libv8 = $(builddir)/libv8.a
+
+dirs = $(profile_builddir)/src \
+	$(profile_builddir)/deps/libev \
+	$(profile_builddir)/deps/libeio \
+	$(profile_builddir)/deps/c-ares \
+	$(profile_builddir)/deps/http_parser \
+	$(profile_builddir)/deps/v8
 
 
 # Rules
 
-all: $(dirs) $(builddir)/node
+all: $(dirs) $(profile_builddir)/node
 
 $(dirs):
 	mkdir -p $@
 
-$(builddir)/deps/libev/%.o: deps/libev/%.c 
+$(profile_builddir)/deps/libev/%.o: deps/libev/%.c 
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $(libev_CFLAGS) $(libev_CPPFLAGS) $< -o $@
 
-$(builddir)/deps/libeio/%.o: deps/libeio/%.c 
+$(profile_builddir)/deps/libeio/%.o: deps/libeio/%.c 
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $(libeio_CFLAGS) $(libeio_CPPFLAGS) $< -o $@
 
-$(builddir)/deps/http_parser/%.o: deps/http_parser/%.c 
+$(profile_builddir)/deps/http_parser/%.o: deps/http_parser/%.c 
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $(http_parser_CFLAGS) \
 		$(http_parser_CPPFLAGS) $< -o $@
 
-$(builddir)/deps/c-ares/%.o: deps/c-ares/%.c 
+$(profile_builddir)/deps/c-ares/%.o: deps/c-ares/%.c 
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $(cares_CFLAGS) $(cares_CPPFLAGS) $< -o $@
 
-$(builddir)/src/%.o: src/%.cc
+$(profile_builddir)/src/%.o: src/%.cc
 	$(CXX) -c $(CXXFLAGS) $(CPPFLAGS) $(node_CFLAGS) $(node_CPPFLAGS) \
 		$(OPENSSL_CPPFLAGS) $< -o $@
 
-$(builddir)/src/node.o: src/node.cc $(builddir)/src/node_natives.h
+$(profile_builddir)/src/node.o: src/node.cc $(profile_builddir)/src/node_natives.h
 	$(CXX) -c $(CXXFLAGS) $(CPPFLAGS) $(node_CFLAGS) $(node_CPPFLAGS) \
 		$(OPENSSL_CPPFLAGS) $< -o $@
 
-$(builddir)/node: $(node_objects) $(libev_objects) $(libeio_objects) \
-		$(http_parser_objects) $(cares_objects)
+$(profile_builddir)/node: $(node_objects) $(libev_objects) $(libeio_objects) \
+		$(http_parser_objects) $(cares_objects) $(libv8)
 	$(CXX) -o $@ $^ $(LINKFLAGS) $(node_LINKFLAGS) $(OPENSSL_LINKFLAGS)
 
-$(builddir)/src/node_natives.h: src/node.js lib/*.js
+$(profile_builddir)/src/node_natives.h: src/node.js lib/*.js
 	python tools/js2c.py $^ > $@
 	# TODO a debug flag for the macros ?
 
-$(builddir)/src/node_config.h: src/node_config.h.in
+$(profile_builddir)/src/node_config.h: src/node_config.h.in
 	sed -e "s#@PREFIX@#$(PREFIX)#" \
 		-e "s#@CCFLAGS@#$(CFLAGS)#" \
 		-e "s#@CPPFLAGS@#$(CPPFLAGS)#" $< > $@ || rm $@
 
+# v8 does its own debug and release version, so we don't put it in the
+# profile_builddir but rather just the builddir.
+$(libv8):
+	python tools/scons/scons.py -C $(builddir) -Y `pwd`/deps/v8 \
+		visibility=default mode=release arch=x64 library=static snapshot=on
+
+
 # header deps
-src/node_version.h: $(builddir)/src/node_config.h
-src/node.cc: $(builddir)/src/node_config.h
+src/node_version.h: $(profile_builddir)/src/node_config.h
+src/node.cc: $(profile_builddir)/src/node_config.h
 
 
 #
