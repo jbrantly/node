@@ -278,28 +278,28 @@ install:
 	@$(WAF) install
 
 
-test: all
+test: $(builddir)/node
 	python tools/test.py --mode=release simple message
 
-test-all: all
+test-all: $(builddir)/node $(builddir)/node_g
 	python tools/test.py --mode=debug,release
 
-test-release: all
+test-release: $(builddir)/node
 	python tools/test.py --mode=release
 
-test-debug: all
+test-debug: $(builddir)/node_g
 	python tools/test.py --mode=debug
 
-test-message: all
+test-message: $(builddir)/node
 	python tools/test.py message
 
-test-simple: all
+test-simple: $(builddir)/node
 	python tools/test.py simple
      
-test-pummel: all
+test-pummel: $(builddir)/node
 	python tools/test.py pummel
 	
-test-internet: all
+test-internet: $(builddir)/node
 	python tools/test.py internet
 
 # http://rtomayko.github.com/ronn
