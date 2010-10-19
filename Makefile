@@ -1,14 +1,10 @@
-
-#
-#
-# New 
-#
-#
-
 #config
+
+# define DEBUG=1 to build node_g
+
 WANT_OPENSSL=1
 PREFIX=/usr
-
+SHELL=/bin/sh
 INSTALL = install
 
 platform := $(shell python -c 'import sys; print sys.platform')
@@ -43,10 +39,6 @@ cflags += -pedantic
 
 
 
-
-# PROFILES
-# Default profile is debug 'make PROFILE=release' for a release.
-PROFILE ?= debug
 
 debug_CPPDEFINES = -DDEBUG $(CFLAGS)
 debug_CFLAGS = -Wall -O0 -ggdb $(CFLAGS)
@@ -125,6 +117,9 @@ dirs = $(builddir)/release/src \
 	$(builddir)/release/deps/v8 \
 	$(builddir)/release/lib/pkgconfig
 debug_dirs = $(subst release,debug,$(dirs))
+
+
+
 
 # Rules
 
@@ -330,15 +325,14 @@ docclean:
 	@-rm -f doc/node.1 doc/api.html doc/changelog.html
 
 clean:
-	@-find build -name "*.o" | xargs rm -f
-	@-find tools -name "*.pyc" | xargs rm -f
+	-rm node node_g $(builddir)/node $(builddir)/node_g
+	-find $(builddir) -name "*.o" | xargs rm -f
+	-find . -name "*.pyc" | xargs rm -f
 
 distclean: docclean
-	@-find tools -name "*.pyc" | xargs rm -f
-	@-rm -rf build/ node node_g
+	-find tools -name "*.pyc" | xargs rm -f
+	-rm -rf build/ node node_g
 
-check:
-	@tools/waf-light check
 
 VERSION=$(shell git describe)
 TARNAME=node-$(VERSION)
