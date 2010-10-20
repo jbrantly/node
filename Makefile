@@ -7,7 +7,13 @@ PREFIX=/usr
 SHELL=/bin/sh
 INSTALL = install
 
+
+-include config.mak.autogen
+-include config.mak
+
+
 platform := $(shell python -c 'import sys; print sys.platform')
+
 
 ifeq ($(platform),linux2)
 	platform := linux
@@ -131,10 +137,10 @@ endif
 
 
 node: $(builddir)/node
-	ln -s $< $@
+	ln -fs $< $@
 
 node_g: $(builddir)/node_g
-	ln -s $< $@
+	ln -fs $< $@
 
 
 
@@ -325,13 +331,14 @@ docclean:
 	@-rm -f doc/node.1 doc/api.html doc/changelog.html
 
 clean:
-	-rm node node_g $(builddir)/node $(builddir)/node_g
+	-rm -f node node_g $(builddir)/node $(builddir)/node_g
 	-find $(builddir) -name "*.o" | xargs rm -f
 	-find . -name "*.pyc" | xargs rm -f
 
 distclean: docclean
 	-find tools -name "*.pyc" | xargs rm -f
 	-rm -rf build/ node node_g
+	-rm -rf configure config.mak.autogen config.log autom4te.cache
 
 
 VERSION=$(shell git describe)
